@@ -1,0 +1,27 @@
+[project]
+name = "fenders"
+version = "0.1.0"
+description = "Does rain keep Seattle off its bikes? A daily pipeline from bike counters and weather to a dashboard."
+requires-python = ">=3.11"
+dependencies = [
+  "requests>=2.32",
+  "pyarrow>=17",
+  "duckdb>=1.1",
+  "dbt-core>=1.10.5", "dbt-duckdb>=1.9.4",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "responses>=0.25", "ruff>=0.6"]
+
+[tool.setuptools]
+packages = ["fenders"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

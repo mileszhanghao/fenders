@@ -1,0 +1,11 @@
+lake/
+__pycache__/
+*.egg-info/
+.venv/
+transform/target/
+transform/logs/
+transform/dbt_packages/
+*.duckdb
+*.duckdb.wal
+site/data/
+.pytest_cache/

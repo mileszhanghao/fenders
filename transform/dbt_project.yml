@@ -1,0 +1,40 @@
+name: fenders
+version: "0.1.0"
+profile: fenders
+config-version: 2
+
+model-paths: [models]
+seed-paths: [seeds]
+macro-paths: [macros]
+test-paths: [tests]
+target-path: target
+clean-targets: [target]
+
+vars:
+  # Where the Parquet lake lives, relative to this folder.
+  lake_path: "{{ env_var('FENDERS_LAKE', '../lake') }}"
+  timezone: America/Los_Angeles
+  # Precipitation classes for an hour (mm). Below `drizzle_mm` counts as dry: the
+  # weather model rarely reports exactly zero.
+  drizzle_mm: 0.1
+  rain_mm: 1.0
+  # Daytime hours (local) used for outage checks and the rain comparison.
+  day_start: 6
+  day_end: 21
+
+models:
+  fenders:
+    staging:
+      +materialized: view
+    intermediate:
+      +materialized: table
+    marts:
+      +materialized: table
+
+seeds:
+  fenders:
+    +column_types:
+      counter_id: varchar
+
+flags:
+  send_anonymous_usage_stats: false

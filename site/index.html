@@ -1,0 +1,226 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fenders · Does rain keep Seattle off its bikes?</title>
+<meta name="description" content="A daily data pipeline from Seattle's bike counters and hourly weather to one question: how much does rain cut riding?">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #eef1ef; --ink: #1d2528; --muted: #5d6a6e; --card: #fbfcfb; --line: #d5dcd9;
+    --dry: #c58b2c; --drizzle: #6c95a6; --rain: #1f4e6b; --accent: #1f4e6b;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #121719; --ink: #e4ebea; --muted: #94a3a6; --card: #1a2124; --line: #2c373a;
+            --dry: #d9a24a; --drizzle: #7fb0c3; --rain: #9cc9e3; --accent: #9cc9e3; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.55 Inter, system-ui, sans-serif; }
+  main { max-width: 980px; margin: 0 auto; padding: 0 16px 64px; }
+  header { padding: 56px 0 24px; }
+  h1 { font: 600 clamp(2.2rem, 6vw, 3.4rem)/1.05 Fraunces, Georgia, serif; margin: 0 0 8px; letter-spacing: -0.01em; }
+  h2 { font: 600 1.5rem/1.2 Fraunces, Georgia, serif; margin: 0 0 6px; }
+  .kicker { color: var(--muted); font-size: 0.95rem; }
+  .answer { font-size: clamp(1.15rem, 2.6vw, 1.45rem); max-width: 46rem; margin: 18px 0 0; }
+  .answer b { color: var(--accent); }
+  section { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 22px 22px 18px; margin: 18px 0; }
+  .note { color: var(--muted); font-size: 0.9rem; margin: 6px 0 12px; max-width: 46rem; }
+  .chart { overflow-x: auto; }
+  .chart svg { max-width: 100%; height: auto; }
+  label { font-size: 0.9rem; color: var(--muted); }
+  select { font: inherit; padding: 4px 8px; border-radius: 8px; border: 1px solid var(--line); background: var(--card); color: var(--ink); }
+  table { border-collapse: collapse; width: 100%; font-size: 0.92rem; }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); }
+  th { color: var(--muted); font-weight: 500; }
+  td.n { text-align: right; font-variant-numeric: tabular-nums; }
+  ol.flow { padding-left: 1.2rem; margin: 8px 0; }
+  ol.flow li { margin: 4px 0; }
+  code { font-size: 0.88em; background: color-mix(in srgb, var(--line) 50%, transparent); padding: 1px 5px; border-radius: 4px; }
+  a { color: var(--accent); }
+  footer { color: var(--muted); font-size: 0.85rem; margin-top: 28px; }
+  .legend { display: flex; gap: 16px; font-size: 0.88rem; color: var(--muted); margin: 4px 0 8px; flex-wrap: wrap; }
+  .sw { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: 0; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <div class="kicker">Fenders · a daily pipeline over Seattle's bike counters</div>
+    <h1>Does rain keep Seattle off its bikes?</h1>
+    <p class="answer" id="answer">Loading…</p>
+  </header>
+
+  <section>
+    <h2>Who stays home</h2>
+    <p class="note">Riders in wet hours compared with what the same counter saw in dry hours of the same month, the same kind of day and the same hour. "Drizzle" is under 1 mm in the hour; "rain" is 1 mm or more.</p>
+    <div class="legend"><span><i class="sw" style="background:var(--drizzle)"></i>Drizzle</span><span><i class="sw" style="background:var(--rain)"></i>Rain</span></div>
+    <div class="chart" id="daypart"></div>
+  </section>
+
+  <section>
+    <h2>By counter</h2>
+    <p class="note">Commuter routes and recreation trails react differently. All daytime hours, 6 am to 9 pm.</p>
+    <div class="chart" id="counters"></div>
+  </section>
+
+  <section>
+    <h2>A weekday, wet and dry</h2>
+    <p class="note">Average riders per hour over the last three years. <label>Counter <select id="pick-hour"></select></label></p>
+    <div class="legend"><span><i class="sw" style="background:var(--dry)"></i>Dry hours</span><span><i class="sw" style="background:var(--rain)"></i>Rain hours</span></div>
+    <div class="chart" id="hours"></div>
+  </section>
+
+  <section>
+    <h2>The last twelve months</h2>
+    <p class="note">Riders per day (line) and rain per day (bars). Gaps are days the counter was offline or reporting zeros all day; they are left out rather than drawn as empty days. <label>Counter <select id="pick-daily"></select></label></p>
+    <div class="chart" id="daily"></div>
+  </section>
+
+  <section>
+    <h2>Data health</h2>
+    <p class="note">Each counter's coverage and the days the pipeline excluded. The city publishes counter data in batches, usually a month or more behind.</p>
+    <div class="chart"><table id="health"></table></div>
+  </section>
+
+  <section>
+    <h2>How it runs</h2>
+    <ol class="flow">
+      <li><b>Extract</b> (Python, every morning in GitHub Actions): new rows from six counters on <a href="https://data.seattle.gov">data.seattle.gov</a> and hourly weather from <a href="https://open-meteo.com">Open-Meteo</a>, stored as monthly Parquet files. Unchanged datasets are skipped; the last two months are re-fetched to pick up corrections.</li>
+      <li><b>Transform and test</b> (dbt on DuckDB): six differently shaped datasets become one hourly table, weather moves onto the counters' local clock (daylight saving included), and offline days are flagged. Data tests run on every build; if any fail, nothing is published.</li>
+      <li><b>Publish</b>: the marts are exported to JSON for this page.</li>
+    </ol>
+    <p class="note"><a href="dbt/">Model lineage and docs (dbt)</a> · <a href="https://github.com/mileszhanghao/fenders">Code on GitHub</a> · <span id="fresh"></span></p>
+  </section>
+
+  <footer>
+    Counter data: City of Seattle, Seattle Department of Transportation (<a href="https://data.seattle.gov">data.seattle.gov</a>, public domain).
+    Weather: <a href="https://open-meteo.com">Open-Meteo.com</a> historical weather API (ERA5-based), CC BY 4.0.
+    Built by <a href="https://github.com/mileszhanghao">Miles Zhang</a>.
+  </footer>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@observablehq/plot@0.6.16/dist/plot.umd.min.js"></script>
+<script>
+const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+const pct = (x) => `${Math.round(Math.abs(x) * 100)}%`;
+const DAYPARTS = ["weekday commute", "weekday other", "weekend"];
+
+Promise.all([fetch("data/summary.json").then((r) => r.json()), fetch("data/daily.json").then((r) => r.json())]).then(([s, daily]) => {
+  const C = { drizzle: css("--drizzle"), rain: css("--rain"), dry: css("--dry"), ink: css("--ink"), muted: css("--muted"), line: css("--line") };
+  const names = Object.fromEntries(s.counters.map((c) => [c.counter_id, c.name]));
+  const eff = s.rain_effect;
+  const find = (counter, sky, daypart) => eff.find((r) => r.counter_id === counter && r.sky === sky && r.daypart === daypart);
+
+  // Headline
+  const rain = find("all", "rain", "all"), drizzle = find("all", "drizzle", "all");
+  const commute = find("all", "rain", "weekday commute"), weekend = find("all", "rain", "weekend");
+  const fewer = (r) => `${pct(r.change)} ${r.change <= 0 ? "fewer" : "more"}`;
+  let answer = "No rain-effect data yet.";
+  if (rain) {
+    answer = `In an hour of real rain, <b>${fewer(rain)}</b> people ride past the city's counters than in a matching dry hour.`;
+    if (drizzle) answer += ` Drizzle: ${fewer(drizzle)}.`;
+    if (commute && weekend) {
+      answer += Math.abs(commute.change) < Math.abs(weekend.change)
+        ? ` Commuters mostly ride anyway (${fewer(commute)} at weekday rush hours); weekend riders are likelier to stay home (${fewer(weekend)}).`
+        : ` Weekday rush hours: ${fewer(commute)}. Weekends: ${fewer(weekend)}.`;
+    }
+  }
+  document.getElementById("answer").innerHTML = answer;
+
+  const lastDay = s.counters.map((c) => c.last_day).sort().at(-1);
+  document.getElementById("fresh").textContent = `Data through ${lastDay}; pipeline last ran ${s.generated_at.slice(0, 16).replace("T", " ")} UTC.`;
+
+  const W = Math.min(900, document.querySelector("main").clientWidth - 46);
+
+  // By daypart
+  const dp = eff.filter((r) => r.counter_id === "all" && DAYPARTS.includes(r.daypart));
+  document.getElementById("daypart").append(Plot.plot({
+    width: W, height: 70 + 52 * DAYPARTS.length, marginLeft: 130, marginRight: 20,
+    x: { label: "Change in riders vs. a matching dry hour", tickFormat: (d) => `${Math.round(d * 100)}%`, grid: true },
+    fy: { domain: DAYPARTS, label: null },
+    y: { domain: ["drizzle", "rain"], axis: null },
+    color: { domain: ["drizzle", "rain"], range: [C.drizzle, C.rain] },
+    marks: [
+      Plot.ruleX([0], { stroke: C.muted }),
+      Plot.barX(dp, { x: "change", y: "sky", fy: "daypart", fill: "sky", insetTop: 2, insetBottom: 2 }),
+      Plot.text(dp, { x: "change", y: "sky", fy: "daypart", text: (d) => `${Math.round(d.change * 100)}%`, dx: -6, textAnchor: "end", fill: "white", fontSize: 11, fontWeight: 600 }),
+      Plot.tip(dp, Plot.pointer({ x: "change", y: "sky", fy: "daypart", title: (d) => `${d.sky}, ${d.daypart}\n${d.wet_hours.toLocaleString()} wet hours\n${Math.round(d.observed).toLocaleString()} riders vs ${Math.round(d.expected).toLocaleString()} expected` })),
+    ],
+  }));
+
+  // By counter
+  const bc = eff.filter((r) => r.counter_id !== "all" && r.daypart === "all");
+  const order = [...new Set(bc.filter((r) => r.sky === "rain").sort((a, b) => a.change - b.change).map((r) => names[r.counter_id]))];
+  document.getElementById("counters").append(Plot.plot({
+    width: W, height: 60 + 34 * order.length, marginLeft: 210,
+    x: { label: "Change in riders vs. a matching dry hour", tickFormat: (d) => `${Math.round(d * 100)}%`, grid: true },
+    y: { domain: order, label: null },
+    color: { domain: ["drizzle", "rain"], range: [C.drizzle, C.rain] },
+    marks: [
+      Plot.ruleX([0], { stroke: C.muted }),
+      Plot.link(
+        order.map((n) => ({ n, a: bc.find((r) => names[r.counter_id] === n && r.sky === "drizzle")?.change, b: bc.find((r) => names[r.counter_id] === n && r.sky === "rain")?.change })).filter((d) => d.a != null && d.b != null),
+        { x1: "a", x2: "b", y: "n", stroke: C.line, strokeWidth: 3 }),
+      Plot.dot(bc, { x: "change", y: (d) => names[d.counter_id], fill: "sky", r: 6, tip: true, title: (d) => `${names[d.counter_id]}, ${d.sky}\n${Math.round(d.change * 100)}% over ${d.wet_hours.toLocaleString()} wet hours` }),
+    ],
+  }));
+
+  // Pickers
+  const ids = s.counters.map((c) => c.counter_id);
+  for (const sel of ["pick-hour", "pick-daily"]) {
+    const el = document.getElementById(sel);
+    el.innerHTML = ids.map((id) => `<option value="${id}">${names[id]}</option>`).join("");
+    el.value = "fremont";
+  }
+
+  function drawHours() {
+    const id = document.getElementById("pick-hour").value;
+    const rows = s.by_hour_last_3_years.filter((r) => r.counter_id === id && !r.is_weekend);
+    const long = rows.flatMap((r) => [{ h: r.hour_of_day, v: r.dry, k: "dry" }, ...(r.rain_hours >= 10 ? [{ h: r.hour_of_day, v: r.rain, k: "rain" }] : [])]);
+    const el = document.getElementById("hours");
+    el.replaceChildren(Plot.plot({
+      width: W, height: 260,
+      x: { label: "Hour of day", domain: [0, 23], ticks: [0, 6, 9, 12, 15, 18, 21], tickFormat: (h) => (h === 0 ? "12a" : h < 12 ? `${h}a` : h === 12 ? "12p" : `${h - 12}p`) },
+      y: { label: "Riders per hour", grid: true },
+      color: { domain: ["dry", "rain"], range: [C.dry, C.rain] },
+      marks: [Plot.lineY(long, { x: "h", y: "v", stroke: "k", strokeWidth: 2.5, curve: "monotone-x" }), Plot.dot(long, Plot.pointerX({ x: "h", y: "v", fill: "k", tip: true }))],
+    }));
+  }
+
+  function drawDaily() {
+    const id = document.getElementById("pick-daily").value;
+    const d = daily[id];
+    const all = d.d.map((day, i) => ({ day: new Date(day + "T12:00:00"), b: d.b[i], p: d.p[i] }));
+    const end = all.at(-1)?.day ?? new Date();
+    const from = new Date(end); from.setFullYear(from.getFullYear() - 1);
+    const rows = all.filter((r) => r.day >= from);
+    const maxB = d3.max(rows, (r) => r.b) || 1, maxP = d3.max(rows, (r) => r.p) || 1;
+    const k = maxB / maxP * 0.45;
+    document.getElementById("daily").replaceChildren(Plot.plot({
+      width: W, height: 280,
+      y: { label: "Riders per day", grid: true },
+      x: { label: null },
+      marks: [
+        Plot.rectY(rows, { x1: (r) => d3.timeDay.offset(r.day, -0.5), x2: (r) => d3.timeDay.offset(r.day, 0.5), y: (r) => r.p * k, fill: C.rain, fillOpacity: 0.35 }),
+        Plot.lineY(rows, { x: "day", y: "b", stroke: C.ink, strokeWidth: 1.2 }),
+        Plot.tip(rows, Plot.pointerX({ x: "day", y: "b", title: (r) => `${r.day.toDateString()}\n${r.b == null ? "excluded" : r.b.toLocaleString() + " riders"}\n${r.p ?? "?"} mm rain` })),
+      ],
+    }));
+  }
+
+  document.getElementById("pick-hour").onchange = drawHours;
+  document.getElementById("pick-daily").onchange = drawDaily;
+  drawHours();
+  drawDaily();
+
+  document.getElementById("health").innerHTML =
+    "<tr><th>Counter</th><th>Counts</th><th>First day</th><th>Last day</th><th class=n>Days</th><th class=n>Excluded</th></tr>" +
+    s.counters.map((c) => `<tr><td>${c.name}</td><td>${c.counts}</td><td>${c.first_day}</td><td>${c.last_day}</td><td class=n>${c.days.toLocaleString()}</td><td class=n>${c.excluded_days.toLocaleString()} (${(100 * c.excluded_days / c.days).toFixed(1)}%)</td></tr>`).join("");
+});
+</script>
+</body>
+</html>

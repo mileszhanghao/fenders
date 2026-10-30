@@ -1,0 +1,100 @@
+version: 2
+
+seeds:
+  - name: counters
+    columns:
+      - name: counter_id
+        data_tests: [unique, not_null]
+  - name: counter_columns
+    data_tests:
+      - unique_combination:
+          arguments:
+            columns: [counter_id, source_column]
+    columns:
+      - name: counter_id
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('counters')
+                field: counter_id
+      - name: role
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [part, total]
+
+models:
+  - name: stg_counter_readings
+    description: Raw counter values, one row per counter, local hour and published column.
+    data_tests:
+      # A counter publishing the same column twice for one hour would be double counted.
+      - unique_combination:
+          arguments:
+            columns: [counter_id, hour_local, source_column]
+    columns:
+      - name: counter_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('counters')
+                field: counter_id
+      - name: value
+        data_tests: [non_negative]
+
+  - name: int_counter_hourly
+    data_tests:
+      - unique_combination:
+          arguments:
+            columns: [counter_id, hour_local]
+    columns:
+      - name: unmapped_values
+        description: >
+          Values in columns the counter_columns seed doesn't know. Non-zero means the
+          publisher changed the dataset's columns, so the mapping needs updating.
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [0]
+      - name: bikes
+        data_tests: [non_negative]
+
+  - name: int_counter_days
+    data_tests:
+      - unique_combination:
+          arguments:
+            columns: [counter_id, date_local]
+
+  - name: stg_weather_hourly
+    data_tests:
+      - unique_combination:
+          arguments:
+            columns: [hour_local]
+    columns:
+      - name: utc_hours
+        description: 1 normally, 2 for the local hour clocks fall back through.
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [1, 2]
+                quote: false
+      - name: precipitation_mm
+        data_tests: [non_negative]
+
+  - name: fct_hourly
+    data_tests:
+      - unique_combination:
+          arguments:
+            columns: [counter_id, hour_local]
+    columns:
+      - name: sky
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [dry, drizzle, rain]
+
+  - name: rain_effect
+    data_tests:
+      - unique_combination:
+          arguments:
+            columns: [counter_id, sky, daypart]

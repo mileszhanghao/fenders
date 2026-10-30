@@ -1,0 +1,7 @@
+fenders:
+  target: local
+  outputs:
+    local:
+      type: duckdb
+      path: "{{ env_var('FENDERS_DB', 'fenders.duckdb') }}"
+      threads: 4
