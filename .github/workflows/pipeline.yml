@@ -65,6 +65,7 @@ jobs:
       - name: Export dashboard data
         run: |
           python -m fenders.export --db transform/fenders.duckdb --lake lake --out site/data
+          python -m fenders.tableau --db transform/fenders.duckdb --out site/data/tableau
           mkdir -p site/dbt && cp transform/target/static_index.html site/dbt/index.html
       - uses: actions/upload-pages-artifact@v3
         with:

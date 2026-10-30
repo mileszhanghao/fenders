@@ -85,3 +85,14 @@ def test_export_writes_dashboard_files(db, tmp_path):
     daily = __import__("json").loads((tmp_path / "site/daily.json").read_text())
     i = daily["thomas_st"]["d"].index("2025-11-04")
     assert daily["thomas_st"]["b"][i] is None  # outage shows as a gap
+
+
+def test_tableau_export_has_readable_flat_tables(db, tmp_path):
+    from fenders.tableau import export
+
+    path = db.execute("select path from duckdb_databases() where database_name = current_database()").fetchone()[0]
+    counts = export(Path(path), tmp_path)
+    assert set(counts) == {"hourly", "daily", "rain_effect"}
+    header = (tmp_path / "hourly.csv").read_text().splitlines()[0]
+    assert "counter" in header and "is_dry_baseline" in header
+    assert "Thomas St Overpass" in (tmp_path / "daily.csv").read_text()
