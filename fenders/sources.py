@@ -26,7 +26,7 @@ COUNTERS: list[Counter] = [
 
 SOCRATA = "https://data.seattle.gov"
 
-# One weather point for the whole city: the counters are all within about 12 km of it.
+# One weather point for the whole city: the counters are all within about 10 km of it.
 WEATHER_POINT = (47.62, -122.33)
 WEATHER_START = date(2012, 10, 1)  # the Fremont counter's first month
 WEATHER_VARS = ["precipitation", "temperature_2m", "wind_speed_10m", "cloud_cover"]

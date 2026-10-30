@@ -25,12 +25,7 @@ seeds:
 
 models:
   - name: stg_counter_readings
-    description: Raw counter values, one row per counter, local hour and published column.
-    data_tests:
-      # A counter publishing the same column twice for one hour would be double counted.
-      - unique_combination:
-          arguments:
-            columns: [counter_id, hour_local, source_column]
+    description: Raw counter values, one row per published row, local hour and column.
     columns:
       - name: counter_id
         data_tests:
@@ -41,6 +36,16 @@ models:
                 field: counter_id
       - name: value
         data_tests: [non_negative]
+
+  - name: int_counter_readings
+    description: One value per counter, local hour and column, after resolving duplicate rows.
+    data_tests:
+      - unique_combination:
+          arguments:
+            columns: [counter_id, hour_local, source_column]
+    columns:
+      - name: is_conflicting
+        description: The source published different values for this hour; the value is left empty.
 
   - name: int_counter_hourly
     data_tests:

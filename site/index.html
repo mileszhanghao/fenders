@@ -125,7 +125,7 @@ Promise.all([fetch("data/summary.json").then((r) => r.json()), fetch("data/daily
     if (drizzle) answer += ` Drizzle: ${fewer(drizzle)}.`;
     if (commute && weekend) {
       answer += Math.abs(commute.change) < Math.abs(weekend.change)
-        ? ` Commuters mostly ride anyway (${fewer(commute)} at weekday rush hours); weekend riders are likelier to stay home (${fewer(weekend)}).`
+        ? ` Most commuters ride anyway (${fewer(commute)} at weekday rush hours); weekend riders are likelier to stay home (${fewer(weekend)}).`
         : ` Weekday rush hours: ${fewer(commute)}. Weekends: ${fewer(weekend)}.`;
     }
   }

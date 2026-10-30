@@ -21,6 +21,8 @@ vars:
   # Daytime hours (local) used for outage checks and the rain comparison.
   day_start: 6
   day_end: 21
+  # Set false to keep all-day-zero days in the analysis (sensitivity check).
+  exclude_zero_days: true
 
 models:
   fenders:

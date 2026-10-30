@@ -87,6 +87,12 @@ def window_start(folder: Path, full: bool) -> date | None:
     return shift_month(month_start(months[-1]), -(LOOKBACK_MONTHS - 1))
 
 
+def _span(months) -> str:
+    """'2014-01..2026-09 (153)': which month files a run rewrote, compactly."""
+    m = sorted(months)
+    return f"{m[0]}..{m[-1]} ({len(m)})" if m else "none"
+
+
 def write_month(path: Path, rows: list[dict], loaded_at: str) -> None:
     columns = sorted({k for r in rows for k in r if not k.startswith(":")})
     table = pa.table(
@@ -134,7 +140,7 @@ def extract_counter(c: Counter, lake: Path, state: dict, full: bool = False) -> 
         "rows_updated_at": updated,
         "loaded_at": loaded_at,
         "rows_last_run": offset,
-        "months_written": sorted(by_month),
+        "months_written": _span(by_month),
     }
     log.info("%s: %d rows into %d month files (from %s)", c.id, offset, len(by_month), start or "the beginning")
     return offset
@@ -182,7 +188,7 @@ def extract_weather(lake: Path, state: dict, today: date, full: bool = False) ->
         )
         pq.write_table(table, folder / f"{key}.parquet", compression="zstd")
         rows += len(cols["time"])
-    state["weather"] = {"loaded_at": loaded_at, "through": end.isoformat(), "months_written": sorted(by_month)}
+    state["weather"] = {"loaded_at": loaded_at, "through": end.isoformat(), "months_written": _span(by_month)}
     log.info("weather: %d hours into %d month files", rows, len(by_month))
     return rows
 
