@@ -4,6 +4,7 @@
 
 Writes three tables with readable column names and labels, one row per grain:
     hourly.csv       one row per counter and local hour (working days only)
+    hourly_profile.csv  the same, summed by counter, year, day type, hour and weather
     daily.csv        one row per counter and day, excluded days kept with a flag
     rain_effect.csv  the matched wet-vs-dry comparison from the rain_effect mart
 """
@@ -40,6 +41,25 @@ QUERIES = {
         from fct_hourly h join counters c using (counter_id)
         where h.bikes is not null
         order by counter, datetime_local
+    """,
+    # The hourly table pre-aggregated for "a day, wet and dry": small enough to upload to
+    # Tableau Public in the browser. Average riders = SUM(riders) / SUM(hours).
+    "hourly_profile": """
+        select
+            c.name as counter,
+            h.year,
+            case when h.is_weekend then 'Weekend' else 'Weekday' end as day_type,
+            h.hour_of_day as hour,
+            case when h.sky = 'dry' and not h.rained_in_prev_3h then 'Dry'
+                 when h.sky = 'rain' then 'Rain'
+                 when h.sky = 'drizzle' then 'Drizzle'
+                 else 'Dry (after rain)' end as weather,
+            sum(h.bikes) as riders,
+            count(*) as hours
+        from fct_hourly h join counters c using (counter_id)
+        where h.bikes is not null and h.sky is not null
+        group by all
+        order by all
     """,
     "daily": """
         select
