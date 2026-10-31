@@ -2,9 +2,9 @@
 
 **Does rain keep Seattle off its bikes?** Most Seattle cyclists ride with fenders, and this pipeline measures how much the rain still costs. Every morning it pulls the city's bike counters and hourly weather, cleans and models them with dbt, tests the result, and publishes a dashboard.
 
-**Dashboard:** https://mileszhanghao.github.io/fenders/ · **Model docs and lineage:** https://mileszhanghao.github.io/fenders/dbt/
+**Dashboard:** https://mileszhanghao.github.io/fenders/ · **Model docs and lineage:** https://mileszhanghao.github.io/fenders/dbt/ · **Tableau Public version:** [Fenders on Tableau Public](https://public.tableau.com/app/profile/hao.zhang4334/viz/FenderswhoridesintheSeattlerain/FenderswhoridesintheSeattlerain)
 
-**Stack:** Python (requests, PyArrow) · Parquet · DuckDB · dbt (dbt-duckdb) · GitHub Actions (schedule) · Observable Plot · pytest · ruff
+**Stack:** Python (requests, PyArrow) · Parquet · DuckDB · dbt (dbt-duckdb) · GitHub Actions (schedule) · Observable Plot · Tableau Public · pytest · ruff
 
 ## The answer so far
 
@@ -20,6 +20,16 @@ Six counters, October 2012 to September 2026:
 Rain halves riding, but not for everyone. Most commuters ride anyway; weekend riders are the ones who stay home. It shows by route too: the Burke-Gilman Trail, a recreation trail, loses 67% of riders in the rain, while the 2nd Ave Cycle Track downtown loses 37%. The dashboard has the breakdown per counter and hour, and the numbers update as new data arrives.
 
 **How "less" is measured.** Each wet hour is compared with dry hours at the same counter, in the same month of the same year, on the same kind of day (weekday or weekend), at the same hour. That holds the season, the long-term trend (including 2020), the weekly rhythm and the rush hours constant. "Dry" hours must also have had no rain in the three hours before, since wet pavement keeps people off bikes too. Then change = riders in wet hours ÷ riders expected from the matching dry hours − 1.
+
+## Tableau version
+
+The same results are also on [Tableau Public](https://public.tableau.com/app/profile/hao.zhang4334/viz/FenderswhoridesintheSeattlerain/FenderswhoridesintheSeattlerain), built from the flat CSV files that `fenders/tableau.py` exports (`site/data/tableau/`). It has three views:
+
+- **Who stays home in the rain:** the change in riders for drizzle and rain, by weekday commute, other weekday hours and weekend (`rain_effect.csv`).
+- **Rain effect by counter:** the change in each counter during rain, all daytime hours (`rain_effect.csv`).
+- **A weekday, dry vs rain:** average riders per counter-hour by hour of day, weekdays since 2023 (`hourly_profile.csv`, as `SUM(riders) / SUM(hours)`).
+
+The numbers match the dbt marts: -48.1% in rain across all counters, -38.4% for the weekday commute and -68.8% on weekends. The Tableau workbook is a snapshot uploaded by hand; the GitHub Pages dashboard is the one that updates daily.
 
 ## Pipeline
 
