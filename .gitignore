@@ -9,3 +9,9 @@ transform/dbt_packages/
 *.duckdb.wal
 site/data/
 .pytest_cache/
+
+# Terraform
+infra/.terraform/
+infra/build/
+infra/*.tfstate*
+build/

@@ -67,6 +67,19 @@ jobs:
           python -m fenders.export --db transform/fenders.duckdb --lake lake --out site/data
           python -m fenders.tableau --db transform/fenders.duckdb --out site/data/tableau
           mkdir -p site/dbt && cp transform/target/static_index.html site/dbt/index.html
+      # Optional: also publish to S3 once infra/ is applied and the two repository
+      # variables are set. Credentials are short-lived (GitHub OIDC), nothing is stored.
+      - name: AWS credentials
+        if: ${{ vars.FENDERS_BUCKET != '' }}
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION || 'us-west-2' }}
+      - name: Publish to S3
+        if: ${{ vars.FENDERS_BUCKET != '' }}
+        run: |
+          pip install -e '.[aws]'
+          python -m fenders.publish_s3 --db transform/fenders.duckdb --site site/data --bucket "${{ vars.FENDERS_BUCKET }}"
       - uses: actions/upload-pages-artifact@v3
         with:
           path: site

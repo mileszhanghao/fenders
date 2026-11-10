@@ -54,6 +54,33 @@ Every run is a GitHub Actions job (`.github/workflows/pipeline.yml`) on a daily 
 2. **Land** the files on the repo's `lake` branch: about 7 MB of Parquet for 14 years of hourly data, versioned by git.
 3. **Transform and test** with dbt. If any test fails with an error, the job stops before publishing, and the lake is saved but the dashboard keeps the last good data.
 4. **Export** the marts to JSON and deploy the dashboard and the dbt docs.
+5. **Publish to S3** (optional, `fenders/publish_s3.py`): the dashboard files, a dated Parquet snapshot of every mart (`marts/<table>/dt=YYYY-MM-DD/`), and a `_manifest.json` with row counts and SHA-256 checksums. Runs only when the repository variables from `infra/` are set.
+
+## AWS: storage, monitoring and infrastructure as code
+
+```
+GitHub Actions ──OIDC (no stored keys)──► IAM role ──► S3 bucket (private, versioned, encrypted)
+                                                          │  _manifest.json
+EventBridge (daily) ──► Lambda `freshness` ──reads────────┘
+                              │
+                              ├──► CloudWatch metrics: Healthy, HoursSincePublish, MartRows
+                              └──► SNS email when something is wrong
+```
+
+- **Terraform** (`infra/`) creates everything: the bucket with public access blocked, versioning, encryption and a lifecycle rule that moves snapshots to cheaper storage after 30 days and deletes them after 180; a least-privilege role that only the `main` branch of this repo can assume through GitHub OIDC; the Lambda, its daily schedule and log group; an SNS topic; and a CloudWatch alarm that also fires if the Lambda stops reporting at all.
+- **The freshness Lambda** (`aws/freshness/handler.py`) catches the failures a green CI badge doesn't: a pipeline that silently stopped running, a weather source that stopped advancing, or a mart that came out empty.
+- **Tested without an AWS account:** `tests/test_aws.py` runs the publisher and the Lambda against moto's in-memory S3, SNS, SQS and CloudWatch, including the stale, missing and empty cases.
+
+```bash
+cd infra
+terraform init
+terraform apply -var 'alert_email=you@example.com'
+# then set repository variables AWS_ROLE_ARN and FENDERS_BUCKET from the outputs
+```
+
+## Databricks
+
+`databricks/fenders_rain_effect.py` is a Databricks notebook that reads the `fct_hourly` Parquet (from the S3 bucket or an uploaded volume), recomputes the rain effect in Spark SQL (`databricks/rain_effect.sql`), adds a year-by-year view, and saves both as Delta tables. `tests/test_databricks.py` runs the same SQL on a local Spark session and checks it gives exactly the same numbers as the dbt model on DuckDB (`pip install pyspark` to run it; skipped otherwise).
 
 ## Problems in the data, and what the pipeline does about them
 
@@ -94,11 +121,13 @@ python -m http.server -d site                   # dashboard on :8000
 ## Tests
 
 ```bash
-pytest          # extract with mocked HTTP, plus the dbt project built on a fixture lake
+pytest          # extract with mocked HTTP, the dbt project on a fixture lake, AWS on moto, Spark parity
 ```
 
 - **Extract:** first load, skipping unchanged datasets, the re-fetch window replacing corrected months, paging, the weather lag, and one failing source not stopping the others.
 - **Models:** a fixture lake (`tests/fixture_lake.py`) with known answers: rain that halves riding, a sensor stuck at zero, and the fall-back night. dbt builds it and the tests check the numbers.
+- **AWS:** S3 publishing and the freshness Lambda against moto (healthy, stale, missing manifest, empty mart).
+- **Databricks:** the Spark SQL port matches the dbt result row for row.
 - **21 data tests** run on the real data in every pipeline run: uniqueness at every grain, accepted values, relationships to the seeds, non-negative counts, unmapped columns, and published totals.
 
 CI runs lint and all tests on every push.
