@@ -56,6 +56,28 @@ Every run is a GitHub Actions job (`.github/workflows/pipeline.yml`) on a daily 
 4. **Export** the marts to JSON and deploy the dashboard and the dbt docs.
 5. **Publish to S3** (optional, `fenders/publish_s3.py`): the dashboard files, a dated Parquet snapshot of every mart (`marts/<table>/dt=YYYY-MM-DD/`), and a `_manifest.json` with row counts and SHA-256 checksums. Runs only when the repository variables from `infra/` are set.
 
+## Airflow
+
+`dags/fenders_daily.py` runs the same pipeline as an Airflow 3 DAG, for teams that orchestrate with Airflow (self-hosted, MWAA or Astronomer) instead of GitHub Actions:
+
+```
+extract ──► dbt_build ──► export ──► bucket_configured? ──► publish_s3
+            (21 data tests: a failure stops everything downstream)
+```
+
+- **Retries with exponential backoff** (2 by default, from 5 minutes), a 45-minute timeout per task, and `max_active_runs=1` so two runs never write the lake at once.
+- **Quality gate:** `dbt_build` fails on any model or data-test error, and Airflow marks `export` and `publish_s3` as upstream-failed, so bad data never reaches the dashboard or S3.
+- **Run parameters:** `{"full": true}` reloads everything; `{"extract": false}` rebuilds from the existing lake. The S3 step is skipped unless `FENDERS_BUCKET` is set.
+- **Tested in CI** (`tests/test_airflow_dag.py`, its own job on Python 3.12): the DAG loads with the right shape, a full run on the fixture lake produces the dashboard data, and a lake with a negative bike count fails `dbt_build` and leaves nothing published.
+
+```bash
+pip install "apache-airflow==3.1.8" --constraint \
+  https://raw.githubusercontent.com/apache/airflow/constraints-3.1.8/constraints-3.12.txt
+pip install -e '.[aws]'
+export AIRFLOW__CORE__DAGS_FOLDER=$PWD/dags FENDERS_HOME=$PWD
+airflow standalone          # UI on :8080; trigger fenders_daily
+```
+
 ## AWS: storage, monitoring and infrastructure as code
 
 ```
@@ -128,6 +150,7 @@ pytest          # extract with mocked HTTP, the dbt project on a fixture lake, A
 - **Models:** a fixture lake (`tests/fixture_lake.py`) with known answers: rain that halves riding, a sensor stuck at zero, and the fall-back night. dbt builds it and the tests check the numbers.
 - **AWS:** S3 publishing and the freshness Lambda against moto (healthy, stale, missing manifest, empty mart).
 - **Databricks:** the Spark SQL port matches the dbt result row for row.
+- **Airflow:** the DAG's shape, an end-to-end run, and a failed data test stopping the run before publishing.
 - **21 data tests** run on the real data in every pipeline run: uniqueness at every grain, accepted values, relationships to the seeds, non-negative counts, unmapped columns, and published totals.
 
 CI runs lint and all tests on every push.

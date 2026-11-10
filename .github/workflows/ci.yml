@@ -24,3 +24,18 @@ jobs:
       - name: dbt parse
         working-directory: transform
         run: dbt parse --profiles-dir .
+
+  airflow:
+    # The Airflow DAG: loads, has the right shape, runs end to end on the fixture lake,
+    # and stops before publishing when a data test fails.
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: |
+          pip install "apache-airflow==3.1.8" \
+            --constraint https://raw.githubusercontent.com/apache/airflow/constraints-3.1.8/constraints-3.12.txt
+          pip install -e '.[dev]'
+      - run: pytest -v tests/test_airflow_dag.py
